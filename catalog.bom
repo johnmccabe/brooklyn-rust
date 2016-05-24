@@ -1,0 +1,193 @@
+#
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+
+brooklyn.catalog:
+  id: rust-game-server
+  version: 0.1.0
+  itemType: template
+  iconUrl: https://pbs.twimg.com/profile_images/378800000826280720/8f9145eff97d162122af02fc1488c611.png
+  name: Rust Game Server
+  description: |
+    Rust Game Server (http://playrust.com)
+  maintainer_name: John McCabe
+  maintainer_email: john@johnmccabe.net
+  issues_url: https://github.com/johnmccabe/brooklyn-rust/issues
+  publish:
+    license_code: Apache-2.0
+    overview: README.md
+    reference: reference.json
+  item:
+    origin: http://www.rustafied.com/
+    brooklyn.parameters:
+    - name: rust.server.port
+      label: Server Port
+      description: Port the Rust game server will bind to.
+      default: 28015
+    - name: rust.rcon.port
+      label: RCON Port
+      description: Port the RCON (Source Remote Console) will bind to.
+      default: 28016
+    - name: rust.server.name
+      label: Server Display Name
+      description: The displayed name of your server
+      default: Rust by Brooklyn
+    - name: steam.owner.name
+      label: Server Owners Steam Name
+      description: Steam username of server owner, used for role elevation in RCON
+    - name: steam.owner.id64
+      label: Owners steamID64 value
+      description: Unique ID for the owners Steam account, see https://steamid.io/lookup.
+    - name: rust.server.description
+      label: Rust Server Description
+      description: Long form description of the Rust Server, server rules etc, appears in browser lists.
+      default: This Rust Server has been deployed by\nApache Brooklyn\nhttp://brooklyn.apache.org
+    - name: rust.server.level
+      label: Rust Level Description
+      description: Description of the map used by the server.
+      default: Procedural Map
+    - name: rust.server.identity
+      label: Unique Server Identity
+      description: Used to create a unique subdirectory for the server data
+      default: rust-server
+    - name: rust.server.seed
+      label: Map Seed
+      description: Seed value used to generate procedural map.
+      default: 33231
+    - name: rust.server.worldsize
+      label: Map Size
+      description: Size of the procedurally generated map.
+      default: 2749
+    - name: rust.server.maxplayers
+      label: Max Players
+      description: Maximum number of simultaneous players
+      default: 50
+    - name: rust.server.saveinterval
+      label: Save Interval (seconds)
+      description: Time (in seconds) between automatic server backups
+      default: 300
+    - name: rust.server.globalchat
+      label: Enable Global Chat
+      description: True allows map-wide chat, false allows only local chat.
+      type: java.lang.Boolean
+      default: true
+    - name: rust.server.headerimage.url
+      label: Server Header Image URL
+      description: URL pointing at server header/banner image, a 512×256 png or jpg 
+      default: http://i.imgur.com/x4TwmCm.png
+    - name: rust.server.url
+      label: Server Webpage URL
+      description: Webpage associated with the Rust Server, forum, clan page etc
+      default: https://github.com/johnmccabe/brooklyn-rust
+
+    services:
+    - type: org.apache.brooklyn.entity.software.base.VanillaSoftwareProcess
+
+      provisioning.properties:
+        osFamily: Ubuntu
+        osVersionRegex: 15\..*
+        
+      brooklyn.config:
+        steam.appid: 258550
+        steam.client.url: https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz
+        steam.user: steam
+        steam.dependencies: lib32gcc1
+        rust.dir: rust_experimental
+
+      shell.env:
+        INSTALL_DIR: $brooklyn:attributeWhenReady("install.dir")
+        HOST_ADDRESS: 0.0.0.0
+        RUST_DIR: $brooklyn:config("rust.dir")
+        RUST_RCON_PORT: $brooklyn:config("rust.rcon.port")
+        RUST_RCON_PASSWORD: $brooklyn:attributeWhenReady("rust.rcon.password")
+        RUST_SERVER_PORT: $brooklyn:config("rust.server.port")
+        RUST_SERVER_NAME: $brooklyn:config("rust.server.name")
+        RUST_SERVER_DESCRIPTION: $brooklyn:config("rust.server.description")
+        RUST_SERVER_LEVEL: $brooklyn:config("rust.server.level")
+        RUST_SERVER_IDENTITY: $brooklyn:config("rust.server.identity")
+        RUST_SERVER_SEED: $brooklyn:config("rust.server.seed")
+        RUST_SERVER_WORLDSIZE: $brooklyn:config("rust.server.worldsize")
+        RUST_SERVER_MAXPLAYERS: $brooklyn:config("rust.server.maxplayers")
+        RUST_SERVER_SAVEINTERVAL: $brooklyn:config("rust.server.saveinterval")
+        RUST_SERVER_GLOBALCHAT: $brooklyn:config("rust.server.globalchat")
+        RUST_SERVER_HEADERIMAGE_URL: $brooklyn:config("rust.server.headerimage.url")
+        RUST_SERVER_URL: $brooklyn:config("rust.server.url")
+        STEAM_APPID: $brooklyn:config("steam.appid")
+        STEAM_CLIENT_URL: $brooklyn:config("steam.client.url")
+        STEAM_USER: $brooklyn:config("steam.user")
+        STEAM_DEPENDENCIES: $brooklyn:config("steam.dependencies")
+        STEAM_OWNER_NAME: $brooklyn:config("steam.owner.name")
+        STEAM_OWNER_ID: $brooklyn:config("steam.owner.id64")
+
+      install.command: |
+        echo "Updating OS"
+        sudo apt-get --yes update
+        
+        echo "Installing Depdendencies"
+        sudo apt-get --yes install ${STEAM_DEPENDENCIES}
+
+        echo "Create Steam User"
+        sudo useradd -m ${STEAM_USER}
+        
+        echo "Install Steam Client"
+        cd $(eval echo ~${STEAM_USER})
+        sudo -u ${STEAM_USER} -E -n -S -- wget ${STEAM_CLIENT_URL}
+        sudo -u ${STEAM_USER} -E -n -S -- tar -xvzf `basename ${STEAM_CLIENT_URL}`
+        sudo -u ${STEAM_USER} -E -n -S -- ./steamcmd.sh +login anonymous +force_install_dir ./${RUST_DIR} +app_update ${STEAM_APPID} +quit
+        sudo -u ${STEAM_USER} -E -n -S -- mkdir -p ./${RUST_DIR}/server/${RUST_SERVER_IDENTITY}/cfg
+
+        echo "Install SystemD Unit file"
+        cat  <<EOF >> ${INSTALL_DIR}/rust.service
+        [Unit]
+        Description=Rust Game Server Service
+        Documentation=https://github.com/johnmccabe/brooklyn-rust
+
+        [Service]
+        ExecStart=$(eval echo ~${STEAM_USER})/${RUST_DIR}/RustDedicated -batchmode +server.ip ${HOST_ADDRESS} +server.port ${RUST_SERVER_PORT} +server.tickrate 30 +server.hostname "${RUST_SERVER_NAME}" +server.description "${RUST_SERVER_DESCRIPTION}" +server.headerimage "${RUST_SERVER_HEADERIMAGE_URL}" +server.url "${RUST_SERVER_URL}" +server.identity "${RUST_SERVER_IDENTITY}" +server.level "${RUST_SERVER_LEVEL}" +server.seed ${RUST_SERVER_SEED} +server.globalchat ${RUST_SERVER_GLOBALCHAT} +server.maxplayers ${RUST_SERVER_MAXPLAYERS} +server.worldsize ${RUST_SERVER_WORLDSIZE} +server.saveinterval ${RUST_SERVER_SAVEINTERVAL} +rcon.ip ${HOST_ADDRESS} +rcon.port ${RUST_RCON_PORT} +rcon.password "${RUST_RCON_PASSWORD}"
+        Restart=on-abort
+        WorkingDirectory=~/${RUST_DIR}
+        User=${STEAM_USER}
+        Group=${STEAM_USER}
+
+        [Install]
+        WantedBy=multi-user.target
+        EOF
+        
+        sudo -E -n -S -- mv ${INSTALL_DIR}/rust.service /etc/systemd/system/rust.service
+        sudo -E -n -S -- systemctl enable rust
+
+      customize.command: |
+        echo "Configuring Server Ownership"
+        cd $(eval echo ~${STEAM_USER})
+        sudo -u ${STEAM_USER} -E -n -S sh -c 'echo "ownerid ${STEAM_OWNER_ID} \"${STEAM_OWNER_NAME}\" \"added by brooklyn\"" > $(eval echo ~${STEAM_USER})/${RUST_DIR}/server/${RUST_SERVER_IDENTITY}/cfg/users.cfg'
+
+      launch.command: |
+        sudo systemctl start rust
+
+      checkRunning.command: |
+        sudo systemctl status rust
+
+      stop.command: |
+        sudo systemctl stop rust
+
+      brooklyn.initializers:
+      - type: org.apache.brooklyn.core.sensor.password.CreatePasswordSensor
+        brooklyn.config:
+          name: rust.rcon.password
+          password.length: 10
+          password.chars: ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
